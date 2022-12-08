@@ -1,0 +1,153 @@
+---
+title: "big data"
+author: "Jason Evans"
+date: "12/6/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r project}
+#'*importing data using file>import dataset>from text(readr)*
+library(readr)
+fat_dat <- read_table2("fat.dat.txt", col_names = FALSE, 
+    col_types = cols(X1 = col_integer()))
+View(fat_dat)
+#assigning names to the different columns, formulas will not be included
+#instead only units will to save space
+colnames(fat_dat)=c('Case Number','Percent body fat using Brozeks equation',
+                    'Percent body fat using Siris equation','Density(gm/cm^3)','Age(yrs)','Weight(lbs)','Height(inches)','Adiposity index','Fat Free Weight','Neck circumference(cm)','Chest circumfrence(cm)','Abdomen circumference(cm)','Hip circumference(cm)','Thigh circumference(cm)','Knee circumference(cm)','Ankle circumference(cm)','Extended biceps circumference(cm)','Forearm circumfrence(cm)','Wrist circumference(cm)')
+
+
+#'*fixing the data in multiple methods *
+
+#cases 48,76 and 96 have a one digit error observed in the bf %s
+#case 42 height should be 69.5 inches instead of 29.5 inches
+#case 182's bf is truncated to zero when negative
+#in case 182, body fat=0 and fat free weight equals negative weight which appears to be impossible
+#i will remove this observation because this is clearly impossible
+fat_dat_1=fat_dat[-c(182),]
+View(fat_dat_1)
+#the 182nd observation is now gone, but the id numbers for the observations after it are n+1
+#however this is not a problem because this is the highest id # observation
+#that we are removing
+
+```
+```{r project2}
+fat_dat_2=fat_dat_1
+
+
+
+fat_dat_2$`Percent body fat using Brozeks equation`=(457/fat_dat_2$`Density(gm/cm^3)`)-414.2
+fat_dat_2$`Percent body fat using Siris equation`=(495/fat_dat_2$`Density(gm/cm^3)`)-450
+View(fat_dat_2)
+
+#now i will fix case 42
+fat_dat_2[42,7]=69.5
+print(fat_dat_2[42,7])
+
+#i will now check for missing variables
+print(sum(is.na(fat_dat_2)))
+#there are zero missing datapoints and the previously mentioned data has been fixed or removed
+#i will now create 3 fits for bodyfat based off of Brozeks equation, Siris equation and the sum of both divided by 2 as a response variable
+
+#'*brozeks equation*
+fit_broz=lm(fat_dat_2$`Percent body fat using Brozeks equation`~fat_dat_2$`Density(gm/cm^3)`+fat_dat_2$`Age(yrs)`+fat_dat_2$`Weight(lbs)`+fat_dat_2$`Height(inches)`+fat_dat_2$`Adiposity index`+fat_dat_2$`Fat Free Weight`+fat_dat_2$`Neck circumference(cm)`+fat_dat_2$`Chest circumfrence(cm)`+fat_dat_2$`Abdomen circumference(cm)`+fat_dat_2$`Hip circumference`+fat_dat_2$`Thigh circumference`+fat_dat_2$`Knee circumference(cm)`+fat_dat_2$`Ankle circumference(cm)`+fat_dat_2$`Extended biceps circumference(cm)`+fat_dat_2$`Forearm circumfrence(cm)`+fat_dat_2$`Wrist circumference(cm)`)
+par(mfrow=c(2,2))
+plot(fit_broz)
+anova(fit_broz)
+summary(fit_broz)
+
+#the plots shows that this data is not normally distributed and this can be easily seen with the plots
+#plot 1:residuals vs fitted does have a pattern and there are outliers
+#plot 2:there is a large amount of points not on the expected normal line for the normal-qq graph
+#plot 3:the scale location graph is not horizontal, and spread does vary greatly
+#plot 4:there is 3 outliers outside of cooks distance in the residual vs leverage graph
+#conclusion:the graphs suggest the data is not normally distributed
+
+
+#'*siris equation*
+fit_siri=lm(fat_dat_2$`Percent body fat using Siris equation`~fat_dat_2$`Density(gm/cm^3)`+fat_dat_2$`Age(yrs)`+fat_dat_2$`Weight(lbs)`+fat_dat_2$`Height(inches)`+fat_dat_2$`Adiposity index`+fat_dat_2$`Fat Free Weight`+fat_dat_2$`Neck circumference(cm)`+fat_dat_2$`Chest circumfrence(cm)`+fat_dat_2$`Abdomen circumference(cm)`+fat_dat_2$`Hip circumference`+fat_dat_2$`Thigh circumference`+fat_dat_2$`Knee circumference(cm)`+fat_dat_2$`Ankle circumference(cm)`+fat_dat_2$`Extended biceps circumference(cm)`+fat_dat_2$`Forearm circumfrence(cm)`+fat_dat_2$`Wrist circumference(cm)`)
+par(mfrow=c(2,2))
+plot(fit_siri)
+anova(fit_siri)
+summary(fit_siri)
+#using the same assumptions as before we see the same normality assumptions are not met and this data is also not normally distributed
+
+
+
+#'*combined bodyfat equation*
+bodyfat=(fat_dat_2$`Percent body fat using Brozeks equation`+fat_dat_2$`Percent body fat using Siris equation`)/2
+fit_bf=lm(bodyfat~fat_dat_2$`Density(gm/cm^3)`+fat_dat_2$`Age(yrs)`+fat_dat_2$`Weight(lbs)`+fat_dat_2$`Height(inches)`+fat_dat_2$`Adiposity index`+fat_dat_2$`Fat Free Weight`+fat_dat_2$`Neck circumference(cm)`+fat_dat_2$`Chest circumfrence(cm)`+fat_dat_2$`Abdomen circumference(cm)`+fat_dat_2$`Hip circumference`+fat_dat_2$`Thigh circumference`+fat_dat_2$`Knee circumference(cm)`+fat_dat_2$`Ankle circumference(cm)`+fat_dat_2$`Extended biceps circumference(cm)`+fat_dat_2$`Forearm circumfrence(cm)`+fat_dat_2$`Wrist circumference(cm)`)
+par(mfrow=c(2,2))
+plot(fit_bf)
+anova(fit_bf)
+summary(fit_bf)
+#the same assumptions for normality are not met so this is also not normally distributed
+#the F test shows a p value that is roughly zero for all graphs which shows a good fit and the
+#multiple r sq and adj r sq are greater than 0.999 which shows strong correlation
+
+
+#i will now choose the fit_bf to continue the analysis for simplicity
+#i will create a new fit without fat free weight or adiposity
+fit_bf_r=lm(bodyfat~fat_dat_2$`Density(gm/cm^3)`+fat_dat_2$`Age(yrs)`+fat_dat_2$`Weight(lbs)`+fat_dat_2$`Height(inches)`+fat_dat_2$`Neck circumference(cm)`+fat_dat_2$`Chest circumfrence(cm)`+fat_dat_2$`Abdomen circumference(cm)`+fat_dat_2$`Hip circumference`+fat_dat_2$`Thigh circumference`+fat_dat_2$`Knee circumference(cm)`+fat_dat_2$`Ankle circumference(cm)`+fat_dat_2$`Extended biceps circumference(cm)`+fat_dat_2$`Forearm circumfrence(cm)`+fat_dat_2$`Wrist circumference(cm)`)
+summary(fit_bf_r)
+#this simply shows that hip and thigh circumference are better linear predictors than any of the other
+#circumference measures
+#i will use backwards step selection
+print(step(fit_bf_r,direction="backward"))
+#this is not as useful because the variations in AIC are not great even when removing different variables to find
+#our final fit
+#i would also like to see how the fit changes when density is removed from the predictors
+fit_bf_r_nod=lm(bodyfat~fat_dat_2$`Age(yrs)`+fat_dat_2$`Weight(lbs)`+fat_dat_2$`Height(inches)`+fat_dat_2$`Neck circumference(cm)`+fat_dat_2$`Chest circumfrence(cm)`+fat_dat_2$`Abdomen circumference(cm)`+fat_dat_2$`Hip circumference`+fat_dat_2$`Thigh circumference`+fat_dat_2$`Knee circumference(cm)`+fat_dat_2$`Ankle circumference(cm)`+fat_dat_2$`Extended biceps circumference(cm)`+fat_dat_2$`Forearm circumfrence(cm)`+fat_dat_2$`Wrist circumference(cm)`)
+summary(fit_bf_r_nod)
+plot(fit_bf_r_nod)
+#this fit shows that chest and forearm significance are less than 0.05, wrist is less than 0.001 and abdomen is roughly zero
+#this makes sense because density varies greatly based on muscle mass and density is in the equation for bodyfat
+#i will also create plots for these significant variables to determine if any have special distributions
+library(ggplot2)
+ggplot(data=fat_dat_2,aes(x=fat_dat_2$`Chest circumfrence(cm)`,y=bodyfat))+geom_point(aes(colour=bmi_index))+geom_smooth()
+ggplot(data=fat_dat_2,aes(x=fat_dat_2$`Forearm circumfrence(cm)`,y=bodyfat))+geom_point()+geom_smooth()
+ggplot(data=fat_dat_2,aes(x=fat_dat_2$`Wrist circumference(cm)`,y=bodyfat))+geom_point()+geom_smooth()
+ggplot(data=fat_dat_2,aes(x=fat_dat_2$`Abdomen circumference(cm)`,y=bodyfat))+geom_point()+geom_smooth()
+#comparing these plots shows that besides the few outliers in this data, we
+#have a roughly linear relationship
+#i will now create bmi indexes using the cut() function
+bmi=(fat_dat_2$`Weight(lbs)`/(fat_dat_2$`Height(inches)`)^2)*703
+bmi_index=cut(bmi,breaks=c(0,18.5,25,30,1000000)
+              ,labels=c("underweight","normal","overweight","obese"))
+# i will now create the same plots as used before, but colored with the bmi_index
+ggplot(data=fat_dat_2,aes(x=fat_dat_2$`Chest circumfrence(cm)`,y=bodyfat))+geom_point(aes(colour=bmi_index))+geom_smooth(se=F)
+ggplot(data=fat_dat_2,aes(x=fat_dat_2$`Forearm circumfrence(cm)`,y=bodyfat))+geom_point(aes(colour=bmi_index))+geom_smooth(se=F)
+ggplot(data=fat_dat_2,aes(x=fat_dat_2$`Wrist circumference(cm)`,y=bodyfat))+geom_point(aes(colour=bmi_index))+geom_smooth(se=F)
+ggplot(data=fat_dat_2,aes(x=fat_dat_2$`Abdomen circumference(cm)`,y=bodyfat))+geom_point(aes(colour=bmi_index))+geom_smooth(se=F)
+#it is interesting to note that there is no underweight people in this dataset 
+#at the same time looking at most national statistics for bmi there is typically very few underweight men
+
+#'*outliers and leverage*
+library(car)
+library(leaps)
+qqPlot(fit_bf_r_nod,labels=row.names(fat_dat_2),id=list(method="identify"))
+outlierTest(fit_bf_r_nod)
+
+hat.plot=function(fit_bf_r_nod,fat_dat_2){
+  p=length(coefficients(fit_bf_r_nod))
+  n=length(fitted(fit_bf_r_nod))
+  plot(hatvalues(fit_bf_r_nod))
+  text(hatvalues(fit_bf_r_nod),labels=rownames(fat_dat_2))
+  identify(1:n,hatvalues(fit_bf_r_nod),names(hatvalues(fit_bf_r_nod)))
+}
+hat.plot(fit_bf_r_nod,fat_dat_2)
+#the outlier test found that case 96 was an outlier and cases 31,39,86 and 175 have high leverage(>0.226)
+#in total we have found that while there does appear to be some high leverage
+#and clear outliers, we can still use this dataset due to the fit having a low
+#p value/good correlation
+
+```
+
+
+
